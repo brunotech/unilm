@@ -35,7 +35,7 @@ def load_model(model, checkpoint_file, model_key, model_prefix):
     for model_key in model_key.split('|'):
         if model_key in checkpoint:
             checkpoint_model = checkpoint[model_key]
-            print("Load state_dict by model_key = %s" % model_key)
+            print(f"Load state_dict by model_key = {model_key}")
             break
 
     if checkpoint_model is None:
@@ -178,7 +178,7 @@ def train(model, linear_classifier, optimizer, loader, epoch, avgpool, amp_forwa
     linear_classifier.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = 'Epoch: [{}]'.format(epoch)
+    header = f'Epoch: [{epoch}]'
     assert avgpool
     for (inp, target) in metric_logger.log_every(loader, 20, header):
         # move to gpu
@@ -201,11 +201,10 @@ def train(model, linear_classifier, optimizer, loader, epoch, avgpool, amp_forwa
 
         output = linear_classifier(output)
 
-        # compute cross entropy loss
-        loss = 0
-        for each_output in output:
-            loss += nn.CrossEntropyLoss()(each_output, target)
-
+        loss = sum(
+            nn.CrossEntropyLoss()(each_output, target)
+            for each_output in output
+        )
         # compute the gradients
         optimizer.zero_grad()
         loss.backward()
@@ -261,9 +260,9 @@ def validate_network(val_loader, model, linear_classifier, avgpool, amp_forward)
             batch_size = inp.shape[0]
             post_str = '_layer%d' % i
             metric_logger.update(loss=loss.item())
-            metric_logger.meters['acc1' + post_str].update(acc1.item(), n=batch_size)
+            metric_logger.meters[f'acc1{post_str}'].update(acc1.item(), n=batch_size)
             if module.num_labels >= 5:
-                metric_logger.meters['acc5' + post_str].update(acc5.item(), n=batch_size)
+                metric_logger.meters[f'acc5{post_str}'].update(acc5.item(), n=batch_size)
 
     eval_results = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
     updated_results = {}
@@ -287,17 +286,14 @@ class LinearClassifier(nn.Module):
         self.num_labels = num_labels
         self.linear = nn.ModuleList()
         self.num_classifier = num_layers
-        for i in range(self.num_classifier):
+        for _ in range(self.num_classifier):
             linear = nn.Linear(dim, num_labels)
             linear.weight.data.normal_(mean=0.0, std=0.01)
             linear.bias.data.zero_()
             self.linear.append(linear)
 
     def forward(self, x_list):
-        results = []
-        for i, linear in enumerate(self.linear):
-            results.append(linear(x_list[i]))
-        return results
+        return [linear(x_list[i]) for i, linear in enumerate(self.linear)]
 
 
 def bool_flag(s):

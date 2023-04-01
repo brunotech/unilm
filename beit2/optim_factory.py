@@ -83,11 +83,7 @@ def get_parameter_groups(model, weight_decay=1e-5, skip_list=(), get_num_layer=N
             layer_id = None
 
         if group_name not in parameter_group_names:
-            if get_layer_scale is not None:
-                scale = get_layer_scale(layer_id)
-            else:
-                scale = 1.
-
+            scale = get_layer_scale(layer_id) if get_layer_scale is not None else 1.
             parameter_group_names[group_name] = {
                 "weight_decay": this_weight_decay,
                 "params": [],
@@ -128,11 +124,11 @@ def create_optimizer(args, model, get_num_layer=None, get_layer_scale=None, filt
         opt_args['eps'] = args.opt_eps
     if hasattr(args, 'opt_betas') and args.opt_betas is not None:
         opt_args['betas'] = args.opt_betas
-    
+
     print('Optimizer config:', opt_args)
     opt_split = opt_lower.split('_')
     opt_lower = opt_split[-1]
-    if opt_lower == 'sgd' or opt_lower == 'nesterov':
+    if opt_lower in ['sgd', 'nesterov']:
         opt_args.pop('eps', None)
         optimizer = optim.SGD(parameters, momentum=args.momentum, nesterov=True, **opt_args)
     elif opt_lower == 'momentum':
@@ -182,11 +178,10 @@ def create_optimizer(args, model, get_num_layer=None, get_layer_scale=None, filt
         opt_args.setdefault('betas', (0.95, 0.98))
         optimizer = FusedNovoGrad(parameters, **opt_args)
     else:
-        assert False and "Invalid optimizer"
+        assert False
         raise ValueError
 
-    if len(opt_split) > 1:
-        if opt_split[0] == 'lookahead':
-            optimizer = Lookahead(optimizer)
+    if len(opt_split) > 1 and opt_split[0] == 'lookahead':
+        optimizer = Lookahead(optimizer)
 
     return optimizer

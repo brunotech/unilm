@@ -94,19 +94,19 @@ def get_f1(prec, rec):
 
 def token_f1(true, pred, labels):
 
-  print(true[:30])
-  print(pred[:30])
-  print(labels)
-  total_f1 = 0.0
-  class_scores = zip(labels, precision_score(true,pred,labels,average=None), recall_score(true,pred,labels,average=None))
-  for label, prec, rec in class_scores:
-    print('Label: %s' %label)
-    if label != 'O':
-        total_f1 += get_f1(prec, rec)
-    print('\tf1        = %f' %get_f1(prec, rec))
-    print('\tprecision = %f' %prec)
-    print('\trecall    = %f' %rec)
-  return total_f1/3
+    print(true[:30])
+    print(pred[:30])
+    print(labels)
+    total_f1 = 0.0
+    class_scores = zip(labels, precision_score(true,pred,labels,average=None), recall_score(true,pred,labels,average=None))
+    for label, prec, rec in class_scores:
+        print(f'Label: {label}')
+        if label != 'O':
+            total_f1 += get_f1(prec, rec)
+        print('\tf1        = %f' %get_f1(prec, rec))
+        print('\tprecision = %f' %prec)
+        print('\trecall    = %f' %rec)
+    return total_f1/3
 
 def train(args, train_dataset, model, tokenizer, labels, pad_token_label_id):
     """ Train the model """

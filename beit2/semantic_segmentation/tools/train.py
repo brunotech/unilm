@@ -107,17 +107,12 @@ def main():
     log_file = osp.join(cfg.work_dir, f'{timestamp}.log')
     logger = get_root_logger(log_file=log_file, log_level=cfg.log_level)
 
-    # init the meta dict to record some important information such as
-    # environment info and seed, which will be logged
-    meta = dict()
     # log env info
     env_info_dict = collect_env()
     env_info = '\n'.join([f'{k}: {v}' for k, v in env_info_dict.items()])
     dash_line = '-' * 60 + '\n'
     logger.info('Environment info:\n' + dash_line + env_info + '\n' +
                 dash_line)
-    meta['env_info'] = env_info
-
     # log some basic info
     logger.info(f'Distributed training: {distributed}')
     logger.info(f'Config:\n{cfg.pretty_text}')
@@ -128,9 +123,11 @@ def main():
                     f'{args.deterministic}')
         set_random_seed(args.seed, deterministic=args.deterministic)
     cfg.seed = args.seed
-    meta['seed'] = args.seed
-    meta['exp_name'] = osp.basename(args.config)
-
+    meta = {
+        'env_info': env_info,
+        'seed': args.seed,
+        'exp_name': osp.basename(args.config),
+    }
     model = build_segmentor(
         cfg.model,
         train_cfg=cfg.get('train_cfg'),

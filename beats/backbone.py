@@ -72,7 +72,7 @@ class TransformerEncoder(nn.Module):
                     gru_rel_pos=args.gru_rel_pos,
                     encoder_layers=args.encoder_layers,
                 )
-                for i in range(args.encoder_layers)
+                for _ in range(args.encoder_layers)
             ]
         )
         if self.relative_position_embedding:
@@ -331,10 +331,7 @@ class MultiheadAttention(nn.Module):
             "Self-attention requires query, key and " "value to be of the same size"
         )
 
-        k_bias = True
-        if rescale_init:
-            k_bias = False
-
+        k_bias = not rescale_init
         k_embed_dim = embed_dim
         q_embed_dim = embed_dim
 
@@ -482,12 +479,9 @@ class MultiheadAttention(nn.Module):
 
         if incremental_state is not None:
             saved_state = self._get_input_buffer(incremental_state)
-            if saved_state is not None and "prev_key" in saved_state:
-                # previous time steps are cached - no need to recompute
-                # key and value if they are static
-                if static_kv:
-                    assert self.encoder_decoder_attention and not self.self_attention
-                    key = value = None
+            if saved_state is not None and "prev_key" in saved_state and static_kv:
+                assert self.encoder_decoder_attention and not self.self_attention
+                key = value = None
         else:
             saved_state = None
 
@@ -733,9 +727,8 @@ class MultiheadAttention(nn.Module):
         result = self.get_incremental_state(incremental_state, "attn_state")
         if result is not None:
             return result
-        else:
-            empty_result: Dict[str, Optional[Tensor]] = {}
-            return empty_result
+        empty_result: Dict[str, Optional[Tensor]] = {}
+        return empty_result
 
     def _set_input_buffer(
             self,

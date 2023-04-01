@@ -28,8 +28,16 @@ from dataset_folder import ImageFolder
 class DataAugmentationForBEiT(object):
     def __init__(self, args):
         imagenet_default_mean_and_std = args.imagenet_default_mean_and_std
-        mean = IMAGENET_INCEPTION_MEAN if not imagenet_default_mean_and_std else IMAGENET_DEFAULT_MEAN
-        std = IMAGENET_INCEPTION_STD if not imagenet_default_mean_and_std else IMAGENET_DEFAULT_STD
+        mean = (
+            IMAGENET_DEFAULT_MEAN
+            if imagenet_default_mean_and_std
+            else IMAGENET_INCEPTION_MEAN
+        )
+        std = (
+            IMAGENET_DEFAULT_STD
+            if imagenet_default_mean_and_std
+            else IMAGENET_INCEPTION_STD
+        )
 
         # oringinal beit data augmentation
         self.common_transform = transforms.Compose([
@@ -74,46 +82,48 @@ class DataAugmentationForBEiT(object):
 
 def build_beit_pretraining_dataset(args):
     transform = DataAugmentationForBEiT(args)
-    print("Data Aug = %s" % str(transform))
-    
+    print(f"Data Aug = {str(transform)}")
+
     return ImageFolder(args.data_path, transform=transform)
 
 ############################################### Dataset and Transforms for Tokenizer Training #########################################################
 
 def build_vqkd_dataset(is_train, args):
+    t = []
     if is_train:
-        t = []
         if args.color_jitter > 0.:
             t.append(transforms.ColorJitter(args.color_jitter, args.color_jitter, args.color_jitter))
-        t.append(transforms.RandomResizedCrop(args.input_size, scale=(args.min_crop_scale, 1.0), interpolation=_pil_interp(args.train_interpolation)))
-        t.append(transforms.RandomHorizontalFlip(0.5))
-        t.append(transforms.ToTensor())
-        transform = transforms.Compose(t)
-
-    else:
-        t = []
-        if args.input_size < 384:
-            args.crop_pct = 224 / 256
-        else:
-            args.crop_pct = 1.0
-        size = int(args.input_size / args.crop_pct)
-        t.append(
-            transforms.Resize(size, interpolation=_pil_interp(args.train_interpolation)),  # to maintain same ratio w.r.t. 224 images
+        t.extend(
+            (
+                transforms.RandomResizedCrop(
+                    args.input_size,
+                    scale=(args.min_crop_scale, 1.0),
+                    interpolation=_pil_interp(args.train_interpolation),
+                ),
+                transforms.RandomHorizontalFlip(0.5),
+            )
         )
-        t.append(transforms.CenterCrop(args.input_size))
-        t.append(transforms.ToTensor())
-        transform = transforms.Compose(t)
-    
+    else:
+        args.crop_pct = 224 / 256 if args.input_size < 384 else 1.0
+        size = int(args.input_size / args.crop_pct)
+        t.extend(
+            (
+                transforms.Resize(
+                    size, interpolation=_pil_interp(args.train_interpolation)
+                ),
+                transforms.CenterCrop(args.input_size),
+            )
+        )
+    t.append(transforms.ToTensor())
+    transform = transforms.Compose(t)
+
     print(f"{'Train' if is_train else 'Test'} Data Aug: {str(transform)}")
 
     if args.data_set == 'image_folder':
-        if is_train:
+        if not is_train and args.eval_data_path == '' or is_train:
             return ImageFolder(args.data_path, transform=transform)
         else:
-            if args.eval_data_path == '':
-                return ImageFolder(args.data_path, transform=transform)
-            else:
-                return ImageFolder(args.eval_data_path, transform=transform)
+            return ImageFolder(args.eval_data_path, transform=transform)
 
     else:
         raise NotImplementedError()
@@ -159,8 +169,16 @@ def build_dataset(is_train, args):
 def build_transform(is_train, args):
     resize_im = args.input_size > 32
     imagenet_default_mean_and_std = args.imagenet_default_mean_and_std
-    mean = IMAGENET_INCEPTION_MEAN if not imagenet_default_mean_and_std else IMAGENET_DEFAULT_MEAN
-    std = IMAGENET_INCEPTION_STD if not imagenet_default_mean_and_std else IMAGENET_DEFAULT_STD
+    mean = (
+        IMAGENET_DEFAULT_MEAN
+        if imagenet_default_mean_and_std
+        else IMAGENET_INCEPTION_MEAN
+    )
+    std = (
+        IMAGENET_DEFAULT_STD
+        if imagenet_default_mean_and_std
+        else IMAGENET_INCEPTION_STD
+    )
 
     if is_train:
         # this should always dispatch to transforms_imagenet_train
@@ -186,16 +204,13 @@ def build_transform(is_train, args):
     t = []
     if resize_im:
         if args.crop_pct is None:
-            if args.input_size < 384:
-                args.crop_pct = 224 / 256
-            else:
-                args.crop_pct = 1.0
+            args.crop_pct = 224 / 256 if args.input_size < 384 else 1.0
         size = int(args.input_size / args.crop_pct)
-        t.append(
-            transforms.Resize(size, interpolation=3),  # to maintain same ratio w.r.t. 224 images
+        t.extend(
+            (
+                transforms.Resize(size, interpolation=3),
+                transforms.CenterCrop(args.input_size),
+            )
         )
-        t.append(transforms.CenterCrop(args.input_size))
-
-    t.append(transforms.ToTensor())
-    t.append(transforms.Normalize(mean, std))
+    t.extend((transforms.ToTensor(), transforms.Normalize(mean, std)))
     return transforms.Compose(t)

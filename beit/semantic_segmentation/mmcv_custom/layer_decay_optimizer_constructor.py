@@ -66,16 +66,17 @@ class LayerDecayOptimizerConstructor(DefaultOptimizerConstructor):
             parameter_groups[group_name]["param_names"].append(name)
         rank, _ = get_dist_info()
         if rank == 0:
-            to_display = {}
-            for key in parameter_groups:
-                to_display[key] = {
-                    "param_names": parameter_groups[key]["param_names"], 
-                    "lr_scale": parameter_groups[key]["lr_scale"], 
-                    "lr": parameter_groups[key]["lr"], 
-                    "weight_decay": parameter_groups[key]["weight_decay"], 
+            to_display = {
+                key: {
+                    "param_names": parameter_groups[key]["param_names"],
+                    "lr_scale": parameter_groups[key]["lr_scale"],
+                    "lr": parameter_groups[key]["lr"],
+                    "weight_decay": parameter_groups[key]["weight_decay"],
                 }
+                for key in parameter_groups
+            }
             print("Param groups = %s" % json.dumps(to_display, indent=2))
-        
+
         # state_dict = module.state_dict()
         # for group_name in parameter_groups:
         #     group = parameter_groups[group_name]

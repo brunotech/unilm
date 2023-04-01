@@ -40,7 +40,7 @@ class DropPath(nn.Module):
         return drop_path(x, self.drop_prob, self.training)
     
     def extra_repr(self) -> str:
-        return 'p={}'.format(self.drop_prob)
+        return f'p={self.drop_prob}'
 
 
 class Mlp(nn.Module):
@@ -345,11 +345,10 @@ class VisionTransformer(nn.Module):
             x = blk(x, rel_pos_bias=rel_pos_bias)
 
         x = self.norm(x)
-        if self.fc_norm is not None:
-            t = x[:, 1:, :]
-            return self.fc_norm(t.mean(1))
-        else:
+        if self.fc_norm is None:
             return x[:, 0]
+        t = x[:, 1:, :]
+        return self.fc_norm(t.mean(1))
 
     def forward(self, x):
         x = self.forward_features(x)

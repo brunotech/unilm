@@ -38,16 +38,16 @@ def fairseq_generate(data_lines, cfg, models, task, batch_size, device):
     logger.info(f'Fairseq generate batch {batch_size}')
     start = time.perf_counter()
     for start_idx in tqdm(range(0, data_size, batch_size)):
-        batch_lines = [line for line in data_lines[start_idx: min(start_idx + batch_size, data_size)]]
+        batch_lines = list(
+            data_lines[start_idx : min(start_idx + batch_size, data_size)]
+        )
         batch_ids = [src_dict.encode_line(sentence, add_if_not_exist=False).long() for sentence in batch_lines]
         lengths = torch.LongTensor([t.numel() for t in batch_ids])
         batch_dataset = task.build_dataset_for_inference(batch_ids, lengths)
         batch = batch_dataset.collater(batch_dataset)
         batch = utils.apply_to_sample(lambda t: t.to(device), batch)
         translations = generator.generate(models, batch, prefix_tokens=None)
-        results = []
-        for id, hypos in zip(batch["id"].tolist(), translations):
-            results.append((id, hypos))
+        results = list(zip(batch["id"].tolist(), translations))
         batched_hypos = [hypos for _, hypos in sorted(results, key=lambda x: x[0])]
         all_results.extend([tgt_dict.string(hypos[0]['tokens']) for hypos in batched_hypos])
     delta = time.perf_counter() - start
@@ -67,8 +67,7 @@ def baseline_forward_decoder(model,
                                         incremental_state=incremental_state,
                                         parallel_forward_start_pos=parallel_forward_start_pos)
     decoder_out_tuple = (decoder_out[0].div_(temperature), decoder_out[1])
-    pred_tokens = torch.argmax(decoder_out_tuple[0], dim=-1).squeeze(0)
-    return pred_tokens
+    return torch.argmax(decoder_out_tuple[0], dim=-1).squeeze(0)
 
 
 @torch.no_grad()
@@ -78,9 +77,9 @@ def baseline_generate(data_lines, model, task, device, max_len=200):
     tgt_dict = task.target_dictionary
     data_size = len(data_lines)
     all_results = []
-    logger.info(f'Baseline generate')
+    logger.info('Baseline generate')
     start = time.perf_counter()
-    for start_idx in tqdm(range(0, data_size)):
+    for start_idx in tqdm(range(data_size)):
         bpe_line = data_lines[start_idx]
         src_tokens = src_dict.encode_line(bpe_line, add_if_not_exist=False).long()
         net_input = {'src_tokens': src_tokens.unsqueeze(0).to(device),
@@ -90,7 +89,7 @@ def baseline_generate(data_lines, model, task, device, max_len=200):
                                                torch.jit.annotate(Dict[str, Dict[str, Optional[Tensor]]], {}))
         tokens = [tgt_dict.eos()]
 
-        for step in range(0, max_len):
+        for _ in range(max_len):
             cur_input_tokens = torch.tensor([tokens]).to(device).long()
             pred_token = baseline_forward_decoder(model,
                                                   cur_input_tokens,
@@ -146,16 +145,17 @@ def gad_generate(data_lines, model, AR_model, task, block_size, device, beta=1, 
     # Generalized Aggressive Decoding
     src_dict = task.source_dictionary
     tgt_dict = task.target_dictionary
-    encoder_state_ids = []
-    for i in range(len(AR_model.decoder.layers)):
-        encoder_state_ids.append(AR_model.decoder.layers[i].encoder_attn._incremental_state_id)
+    encoder_state_ids = [
+        AR_model.decoder.layers[i].encoder_attn._incremental_state_id
+        for i in range(len(AR_model.decoder.layers))
+    ]
     data_size = len(data_lines)
     all_results = []
-    logger.info(f'GAD generate')
+    logger.info('GAD generate')
     pass_tokens = [0] * max_len
     sent_nums = [0] * max_len
     start = time.perf_counter()
-    for start_idx in tqdm(range(0, data_size)):
+    for start_idx in tqdm(range(data_size)):
         bpe_line = data_lines[start_idx]
         src_tokens = src_dict.encode_line(bpe_line, add_if_not_exist=False).long()
         net_input = {'src_tokens': src_tokens.unsqueeze(0).to(device),
@@ -166,7 +166,7 @@ def gad_generate(data_lines, model, AR_model, task, block_size, device, beta=1, 
                                                torch.jit.annotate(Dict[str, Dict[str, Optional[Tensor]]], {}))
         prev_output_tokens = [tgt_dict.unk()] * block_size
         start_pos = 0
-        for step in range(0, max_len):
+        for step in range(max_len):
             start_pos, prev_output_tokens, pass_token = gad_forward(incremental_state, encoder_state_ids,
                                                                     start_pos, block_size, tgt_dict,
                                                                     prev_output_tokens,
@@ -187,10 +187,7 @@ def gad_generate(data_lines, model, AR_model, task, block_size, device, beta=1, 
     total_iter = 0
     for step in range(max_len):
         if sent_nums[step - 1] > 0:
-            if step == 0:
-                last_num = data_size
-            else:
-                last_num = sent_nums[step - 1]
+            last_num = data_size if step == 0 else sent_nums[step - 1]
             if (last_num - sent_nums[step]) > 0:
                 total_iter += (last_num - sent_nums[step]) * (step)
     print("Avg decoding iteration:", total_iter / data_size)
@@ -220,12 +217,16 @@ def gad_forward(incremental_state, encoder_state_ids, start_pos, block_size, tgt
                                      beta=beta,
                                      tau=tau)
 
-    bifurcation = block_size
-    for i, (token, AR_topk_token) in enumerate(zip(prev_output_tokens[start_pos:], AR_topk_tokens[:-1][:])):
-        if token not in AR_topk_token:
-            bifurcation = i
-            break
-
+    bifurcation = next(
+        (
+            i
+            for i, (token, AR_topk_token) in enumerate(
+                zip(prev_output_tokens[start_pos:], AR_topk_tokens[:-1][:])
+            )
+            if token not in AR_topk_token
+        ),
+        block_size,
+    )
     next_output_tokens = prev_output_tokens[:start_pos + bifurcation] + [AR_topk_tokens[bifurcation][0]] + [
         tgt_dict.unk()] * block_size
 
@@ -233,7 +234,7 @@ def gad_forward(incremental_state, encoder_state_ids, start_pos, block_size, tgt
     find_eos = False
     for i, o in enumerate(next_output_tokens[start_pos:start_pos + bifurcation + 1]):
         if o == tgt_dict.eos() or i + start_pos == max_len:
-            next_output_tokens = next_output_tokens[0:start_pos + i]
+            next_output_tokens = next_output_tokens[:start_pos + i]
             start_pos = -1
             pass_token = i
             find_eos = True
@@ -273,13 +274,10 @@ if __name__ == '__main__':
     task = tasks.setup_task(cfg.task)
 
     # NAR drafter
-    logger.info("loading model(s) from {}".format(cfg.common_eval.path))
+    logger.info(f"loading model(s) from {cfg.common_eval.path}")
     models, _model_args, _model_task = load_model_ensemble_and_task(filenames=[cfg.common_eval.path], task=task)
 
-    if cmd_args.cpu:
-        device = torch.device('cpu')
-    else:
-        device = torch.device('cuda')
+    device = torch.device('cpu') if cmd_args.cpu else torch.device('cuda')
     model = models[0].to(device).eval()
 
     # AR verifier

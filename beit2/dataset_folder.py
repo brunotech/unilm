@@ -121,9 +121,9 @@ class DatasetFolder(VisionDataset):
             classes, class_to_idx = self._find_classes(self.root)
             samples = make_dataset(self.root, class_to_idx, extensions, is_valid_file)
             if len(samples) == 0:
-                msg = "Found 0 files in subfolders of: {}\n".format(self.root)
+                msg = f"Found 0 files in subfolders of: {self.root}\n"
                 if extensions is not None:
-                    msg += "Supported extensions are: {}".format(",".join(extensions))
+                    msg += f'Supported extensions are: {",".join(extensions)}'
                 raise RuntimeError(msg)
         else:
             with open(index_file, mode="r", encoding="utf-8") as reader:
@@ -134,18 +134,16 @@ class DatasetFolder(VisionDataset):
                     class_name = data["class"]
                     classes.append(class_name)
                     index_data[class_name] = data["files"]
-                
+
                 classes.sort()
                 class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
                 samples = []
-                for class_name in index_data:
+                for class_name, value in index_data.items():
                     class_index = class_to_idx[class_name]
-                    for each_file in index_data[class_name]:
-                        samples.append(
-                            (os.path.join(root, class_name, each_file), 
-                            class_index)
-                        )
-
+                    samples.extend(
+                        (os.path.join(root, class_name, each_file), class_index)
+                        for each_file in value
+                    )
         self.loader = loader
         self.extensions = extensions
 
@@ -203,15 +201,15 @@ class DatasetFolder(VisionDataset):
 
     def filenames(self, indices=[], basename=False):
         if indices:
-            if basename:
-                return [os.path.basename(self.samples[i][0]) for i in indices]
-            else:
-                return [self.samples[i][0] for i in indices]
+            return (
+                [os.path.basename(self.samples[i][0]) for i in indices]
+                if basename
+                else [self.samples[i][0] for i in indices]
+            )
+        if basename:
+            return [os.path.basename(x[0]) for x in self.samples]
         else:
-            if basename:
-                return [os.path.basename(x[0]) for x in self.samples]
-            else:
-                return [x[0] for x in self.samples]
+            return [x[0] for x in self.samples]
 
 
 IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif', '.tiff', '.webp')

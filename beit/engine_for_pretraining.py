@@ -28,7 +28,7 @@ def train_one_epoch(model: torch.nn.Module, d_vae: torch.nn.Module,
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('min_lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = 'Epoch: [{}]'.format(epoch)
+    header = f'Epoch: [{epoch}]'
     print_freq = 10
 
     for step, (batch, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
@@ -58,7 +58,7 @@ def train_one_epoch(model: torch.nn.Module, d_vae: torch.nn.Module,
         loss_value = loss.item()
 
         if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
+            print(f"Loss is {loss_value}, stopping training")
             sys.exit(1)
 
         optimizer.zero_grad()

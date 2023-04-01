@@ -43,11 +43,8 @@ class SETR_Resize(object):
         if img_scale is None:
             self.img_scale = None
         else:
-            if isinstance(img_scale, list):
-                self.img_scale = img_scale
-            else:
-                self.img_scale = [img_scale]
-            # assert mmcv.is_list_of(self.img_scale, tuple)
+            self.img_scale = img_scale if isinstance(img_scale, list) else [img_scale]
+                # assert mmcv.is_list_of(self.img_scale, tuple)
 
         if ratio_range is not None:
             # mode 1: given a scale and a range of image ratio
@@ -172,11 +169,7 @@ class SETR_Resize(object):
 
         if self.keep_ratio:
             if self.setr_multi_scale:
-                if min(results['scale']) < self.crop_size[0]:
-                    new_short = self.crop_size[0]
-                else:
-                    new_short = min(results['scale'])
-                    
+                new_short = max(min(results['scale']), self.crop_size[0])
                 h, w = results['img'].shape[:2]
                 if h > w:
                     new_h, new_w = new_short * h / w, new_short

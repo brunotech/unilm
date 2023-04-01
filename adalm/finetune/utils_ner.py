@@ -49,18 +49,18 @@ class InputFeatures(object):
 
 
 def read_examples_from_file(data_dir, mode):
-    file_path = os.path.join(data_dir, "{}.txt".format(mode))
+    file_path = os.path.join(data_dir, f"{mode}.txt")
     guid_index = 1
     examples = []
     with open(file_path, encoding="utf-8") as f:
-        for line in f.readlines():
+        for line in f:
             line = line.strip().split("\t")
             words = line[0].split()
             labels = line[1].split()
             assert len(words) == len(labels)
             guid_index +=1
             examples.append(InputExample(guid=guid_index, words=words, labels=labels))
-                
+
     return examples
 
 
@@ -186,11 +186,10 @@ def convert_examples_to_features(
 
 
 def get_labels(path):
-    if path:
-        with open(path, "r") as f:
-            labels = f.read().splitlines()
-        if "O" not in labels:
-            labels = ["O"] + labels
-        return labels
-    else:
+    if not path:
         return ["O", "B-MISC", "I-MISC", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
+    with open(path, "r") as f:
+        labels = f.read().splitlines()
+    if "O" not in labels:
+        labels = ["O"] + labels
+    return labels

@@ -143,8 +143,7 @@ class VQKD(nn.Module):
         
         data = self.pre_process(data)
         quantize, embed_ind, loss = self.encode(data)
-        output = {}
-        output['token'] = embed_ind.view(data.shape[0], -1)
+        output = {'token': embed_ind.view(data.shape[0], -1)}
         output['input_img'] = data
 
         return output
@@ -167,9 +166,7 @@ class VQKD(nn.Module):
         # reshape tokens to feature maps for patch embed in decoder
         # quantize = rearrange(quantize, 'b (h w) c -> b c h w', h=self.token_shape[0], w=self.token_shape[1])
         decoder_features = self.decoder(quantize, return_patch_tokens=True)
-        rec = self.decode_task_layer(decoder_features)
-
-        return rec
+        return self.decode_task_layer(decoder_features)
     
     def get_codebook_indices(self, x, **kwargs):
         # for beit pre-training
@@ -189,14 +186,12 @@ class VQKD(nn.Module):
         return target
 
     def calculate_rec_loss(self, rec, target):  
-        if self.rec_loss_type == 'cosine':
-            target = target / target.norm(dim=-1, keepdim=True)
-            rec = rec / rec.norm(dim=-1, keepdim=True)
-            rec_loss = (1 - (target * rec).sum(-1)).mean()
-        else:
+        if self.rec_loss_type != 'cosine':
             raise NotImplementedError
 
-        return rec_loss
+        target = target / target.norm(dim=-1, keepdim=True)
+        rec = rec / rec.norm(dim=-1, keepdim=True)
+        return (1 - (target * rec).sum(-1)).mean()
 
     def forward(self, x, **kwargs):
         """
@@ -212,9 +207,8 @@ class VQKD(nn.Module):
         rec_loss = self.calculate_rec_loss(xrec, target)
         loss = emb_loss + rec_loss
 
-        log = {}
         split="train" if self.training else "val"
-        log[f'{split}/quant_loss'] = emb_loss.detach().mean()
+        log = {f'{split}/quant_loss': emb_loss.detach().mean()}
         log[f'{split}/rec_loss'] = rec_loss.detach().mean()
         log[f'{split}/total_loss'] = loss.detach().mean()
 
@@ -250,7 +244,7 @@ def get_model_default_params():
 def vqkd_encoder_base_decoder_1x768x12_clip(pretrained=False, pretrained_weight=None, as_tokenzer=False, img_size=224, 
                                             n_code=8192, code_dim=32, **kwargs):
     encoder_config, decoder_config = get_model_default_params(), get_model_default_params()
-    
+
     # encoder settings
     encoder_config['img_size'] = img_size
     encoder_config['num_classes'] = 0
@@ -263,7 +257,7 @@ def vqkd_encoder_base_decoder_1x768x12_clip(pretrained=False, pretrained_weight=
     # teacher settings
     _ = kwargs.pop("teacher_model_type", "clip")
 
-    teacher_model_type = 'clip' if not as_tokenzer else 'None'
+    teacher_model_type = 'None' if as_tokenzer else 'clip'
     decoder_out_dim = 512
 
     model = VQKD(encoder_config, decoder_config, n_code, code_dim, teacher_model_type=teacher_model_type, 
@@ -277,13 +271,10 @@ def vqkd_encoder_base_decoder_1x768x12_clip(pretrained=False, pretrained_weight=
             weights = torch.hub.load_state_dict_from_url(pretrained_weight, map_location='cpu', check_hash=True)
         else:
             weights = torch.load(pretrained_weight, map_location='cpu')
-            
-        if 'model' in weights:
-            weights = weights['model']
-        else:
-            weights = weights["state_dict"]
+
+        weights = weights['model'] if 'model' in weights else weights["state_dict"]
         keys = list(weights.keys())
-        
+
         for k in keys:
             if k.startswith("loss") or k.startswith("teacher") or k.startswith("scaling"):
                 del weights[k]
@@ -294,7 +285,7 @@ def vqkd_encoder_base_decoder_1x768x12_clip(pretrained=False, pretrained_weight=
 def vqkd_encoder_base_decoder_3x768x12_clip(pretrained=False, pretrained_weight=None, as_tokenzer=False, img_size=224, 
                                             n_code=8192, code_dim=32, **kwargs):
     encoder_config, decoder_config = get_model_default_params(), get_model_default_params()
-    
+
     # encoder settings
     encoder_config['img_size'] = img_size
     encoder_config['num_classes'] = 0
@@ -306,8 +297,8 @@ def vqkd_encoder_base_decoder_3x768x12_clip(pretrained=False, pretrained_weight=
     decoder_config['depth'] = 3
     # teacher settings
     _ = kwargs.pop("teacher_model_type", "clip")
-    
-    teacher_model_type = 'clip' if not as_tokenzer else 'None'
+
+    teacher_model_type = 'None' if as_tokenzer else 'clip'
     decoder_out_dim = 512
 
     model = VQKD(encoder_config, decoder_config, n_code, code_dim, teacher_model_type=teacher_model_type, 
@@ -321,13 +312,10 @@ def vqkd_encoder_base_decoder_3x768x12_clip(pretrained=False, pretrained_weight=
             weights = torch.hub.load_state_dict_from_url(pretrained_weight, map_location='cpu', check_hash=True)
         else:
             weights = torch.load(pretrained_weight, map_location='cpu')
-        
-        if 'model' in weights:
-            weights = weights['model']
-        else:
-            weights = weights["state_dict"]
+
+        weights = weights['model'] if 'model' in weights else weights["state_dict"]
         keys = list(weights.keys())
-        
+
         for k in keys:
             if k.startswith("loss") or k.startswith("teacher") or k.startswith("scaling"):
                 del weights[k]
@@ -339,7 +327,7 @@ def vqkd_encoder_base_decoder_3x768x12_clip(pretrained=False, pretrained_weight=
 def vqkd_encoder_base_decoder_1x768x12_dino(pretrained=False, pretrained_weight=None, as_tokenzer=False, img_size=224, 
                                             n_code=8192, code_dim=32, **kwargs):
     encoder_config, decoder_config = get_model_default_params(), get_model_default_params()
-    
+
     # encoder settings
     encoder_config['img_size'] = img_size
     encoder_config['num_classes'] = 0
@@ -352,7 +340,7 @@ def vqkd_encoder_base_decoder_1x768x12_dino(pretrained=False, pretrained_weight=
     # teacher settings
     _ = kwargs.pop("teacher_model_type", "dino")
 
-    teacher_model_type = 'dino' if not as_tokenzer else 'None'
+    teacher_model_type = 'None' if as_tokenzer else 'dino'
     decoder_out_dim = 768
 
     model = VQKD(encoder_config, decoder_config, n_code, code_dim, teacher_model_type=teacher_model_type, 
@@ -361,18 +349,15 @@ def vqkd_encoder_base_decoder_1x768x12_dino(pretrained=False, pretrained_weight=
     if as_tokenzer:
         assert pretrained
         assert pretrained_weight is not None
-        
+
         if pretrained_weight.startswith('https'):
             weights = torch.hub.load_state_dict_from_url(pretrained_weight, map_location='cpu', check_hash=True)
         else:
             weights = torch.load(pretrained_weight, map_location='cpu')
-        
-        if 'model' in weights:
-            weights = weights['model']
-        else:
-            weights = weights["state_dict"]
+
+        weights = weights['model'] if 'model' in weights else weights["state_dict"]
         keys = list(weights.keys())
-        
+
         for k in keys:
             if k.startswith("loss") or k.startswith("teacher") or k.startswith("scaling"):
                 del weights[k]
@@ -380,8 +365,6 @@ def vqkd_encoder_base_decoder_1x768x12_dino(pretrained=False, pretrained_weight=
     return model
 
 
-if __name__ == '__main__':
-    pass
 
 
 

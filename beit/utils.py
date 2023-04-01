@@ -110,15 +110,12 @@ class MetricLogger(object):
             return self.meters[attr]
         if attr in self.__dict__:
             return self.__dict__[attr]
-        raise AttributeError("'{}' object has no attribute '{}'".format(
-            type(self).__name__, attr))
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{attr}'"
+        )
 
     def __str__(self):
-        loss_str = []
-        for name, meter in self.meters.items():
-            loss_str.append(
-                "{}: {}".format(name, str(meter))
-            )
+        loss_str = [f"{name}: {str(meter)}" for name, meter in self.meters.items()]
         return self.delimiter.join(loss_str)
 
     def synchronize_between_processes(self):
@@ -129,14 +126,13 @@ class MetricLogger(object):
         self.meters[name] = meter
 
     def log_every(self, iterable, print_freq, header=None):
-        i = 0
         if not header:
             header = ''
         start_time = time.time()
         end = time.time()
         iter_time = SmoothedValue(fmt='{avg:.4f}')
         data_time = SmoothedValue(fmt='{avg:.4f}')
-        space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
+        space_fmt = f':{len(str(len(iterable)))}d'
         log_msg = [
             header,
             '[{0' + space_fmt + '}/{1}]',
@@ -149,7 +145,7 @@ class MetricLogger(object):
             log_msg.append('max mem: {memory:.0f}')
         log_msg = self.delimiter.join(log_msg)
         MB = 1024.0 * 1024.0
-        for obj in iterable:
+        for i, obj in enumerate(iterable):
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
@@ -167,7 +163,6 @@ class MetricLogger(object):
                         i, len(iterable), eta=eta_string,
                         meters=str(self),
                         time=str(iter_time), data=str(data_time)))
-            i += 1
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -193,7 +188,7 @@ class TensorboardLogger(object):
             if isinstance(v, torch.Tensor):
                 v = v.item()
             assert isinstance(v, (float, int))
-            self.writer.add_scalar(head + "/" + k, v, self.step if step is None else step)
+            self.writer.add_scalar(f"{head}/{k}", v, self.step if step is None else step)
 
     def flush(self):
         self.writer.flush()
@@ -225,23 +220,15 @@ def setup_for_distributed(is_master):
 
 
 def is_dist_avail_and_initialized():
-    if not dist.is_available():
-        return False
-    if not dist.is_initialized():
-        return False
-    return True
+    return bool(dist.is_initialized()) if dist.is_available() else False
 
 
 def get_world_size():
-    if not is_dist_avail_and_initialized():
-        return 1
-    return dist.get_world_size()
+    return dist.get_world_size() if is_dist_avail_and_initialized() else 1
 
 
 def get_rank():
-    if not is_dist_avail_and_initialized():
-        return 0
-    return dist.get_rank()
+    return dist.get_rank() if is_dist_avail_and_initialized() else 0
 
 
 def is_main_process():
@@ -258,11 +245,13 @@ def init_distributed_mode(args):
         args.rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
         args.world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
         args.gpu = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
-        args.dist_url = "tcp://%s:%s" % (os.environ['MASTER_ADDR'], os.environ['MASTER_PORT'])
+        args.dist_url = (
+            f"tcp://{os.environ['MASTER_ADDR']}:{os.environ['MASTER_PORT']}"
+        )
         os.environ['LOCAL_RANK'] = str(args.gpu)
         os.environ['RANK'] = str(args.rank)
         os.environ['WORLD_SIZE'] = str(args.world_size)
-        # ["RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT", "LOCAL_RANK"]
+            # ["RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT", "LOCAL_RANK"]
     elif 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ['WORLD_SIZE'])
@@ -279,8 +268,10 @@ def init_distributed_mode(args):
 
     torch.cuda.set_device(args.gpu)
     args.dist_backend = 'nccl'
-    print('| distributed init (rank {}): {}, gpu {}'.format(
-        args.rank, args.dist_url, args.gpu), flush=True)
+    print(
+        f'| distributed init (rank {args.rank}): {args.dist_url}, gpu {args.gpu}',
+        flush=True,
+    )
     torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                          world_size=args.world_size, rank=args.rank)
     torch.distributed.barrier()
@@ -323,16 +314,16 @@ def load_state_dict(model, state_dict, prefix='', ignore_missing="relative_posit
 
     missing_keys = warn_missing_keys
 
-    if len(missing_keys) > 0:
+    if missing_keys:
         print("Weights of {} not initialized from pretrained model: {}".format(
             model.__class__.__name__, missing_keys))
-    if len(unexpected_keys) > 0:
+    if unexpected_keys:
         print("Weights from pretrained model not used in {}: {}".format(
             model.__class__.__name__, unexpected_keys))
-    if len(ignore_missing_keys) > 0:
+    if ignore_missing_keys:
         print("Ignored weights of {} not initialized from pretrained model: {}".format(
             model.__class__.__name__, ignore_missing_keys))
-    if len(error_msgs) > 0:
+    if error_msgs:
         print('\n'.join(error_msgs))
 
 
@@ -369,15 +360,23 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     if isinstance(parameters, torch.Tensor):
         parameters = [parameters]
     parameters = [p for p in parameters if p.grad is not None]
-    norm_type = float(norm_type)
-    if len(parameters) == 0:
+    norm_type = norm_type
+    if not parameters:
         return torch.tensor(0.)
     device = parameters[0].grad.device
-    if norm_type == inf:
-        total_norm = max(p.grad.detach().abs().max().to(device) for p in parameters)
-    else:
-        total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]), norm_type)
-    return total_norm
+    return (
+        max(p.grad.detach().abs().max().to(device) for p in parameters)
+        if norm_type == inf
+        else torch.norm(
+            torch.stack(
+                [
+                    torch.norm(p.grad.detach(), norm_type).to(device)
+                    for p in parameters
+                ]
+            ),
+            norm_type,
+        )
+    )
 
 
 def cosine_scheduler(base_value, final_value, epochs, niter_per_ep, warmup_epochs=0,
@@ -414,7 +413,7 @@ def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler, mo
     output_dir = Path(args.output_dir)
     epoch_name = str(epoch)
     if loss_scaler is not None:
-        checkpoint_paths = [output_dir / ('checkpoint-%s.pth' % epoch_name)]
+        checkpoint_paths = [output_dir / f'checkpoint-{epoch_name}.pth']
         for checkpoint_path in checkpoint_paths:
             to_save = {
                 'model': model_without_ddp.state_dict(),
@@ -432,7 +431,11 @@ def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler, mo
         client_state = {'epoch': epoch}
         if model_ema is not None:
             client_state['model_ema'] = get_state_dict(model_ema)
-        model.save_checkpoint(save_dir=args.output_dir, tag="checkpoint-%s" % epoch_name, client_state=client_state)
+        model.save_checkpoint(
+            save_dir=args.output_dir,
+            tag=f"checkpoint-{epoch_name}",
+            client_state=client_state,
+        )
 
 
 def restart_from_checkpoint(ckp_path, run_variables=None, **kwargs):
@@ -441,7 +444,7 @@ def restart_from_checkpoint(ckp_path, run_variables=None, **kwargs):
     """
     if not os.path.isfile(ckp_path):
         return
-    print("Found checkpoint at {}".format(ckp_path))
+    print(f"Found checkpoint at {ckp_path}")
 
     # open checkpoint file
     checkpoint = torch.load(ckp_path, map_location="cpu")
@@ -453,15 +456,15 @@ def restart_from_checkpoint(ckp_path, run_variables=None, **kwargs):
         if key in checkpoint and value is not None:
             try:
                 msg = value.load_state_dict(checkpoint[key], strict=False)
-                print("=> loaded '{}' from checkpoint '{}' with msg {}".format(key, ckp_path, msg))
+                print(f"=> loaded '{key}' from checkpoint '{ckp_path}' with msg {msg}")
             except TypeError:
                 try:
                     msg = value.load_state_dict(checkpoint[key])
-                    print("=> loaded '{}' from checkpoint: '{}'".format(key, ckp_path))
+                    print(f"=> loaded '{key}' from checkpoint: '{ckp_path}'")
                 except ValueError:
-                    print("=> failed to load '{}' from checkpoint: '{}'".format(key, ckp_path))
+                    print(f"=> failed to load '{key}' from checkpoint: '{ckp_path}'")
         else:
-            print("=> key '{}' not found in checkpoint: '{}'".format(key, ckp_path))
+            print(f"=> key '{key}' not found in checkpoint: '{ckp_path}'")
 
     # re load variable important for the run
     if run_variables is not None:
@@ -484,16 +487,18 @@ def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, mode
                     latest_ckpt = max(int(t), latest_ckpt)
             if latest_ckpt >= 0:
                 args.resume = os.path.join(output_dir, 'checkpoint-%d.pth' % latest_ckpt)
-            print("Auto resume checkpoint: %s" % args.resume)
+            print(f"Auto resume checkpoint: {args.resume}")
 
         if args.resume:
-            if args.resume.startswith('https'):
-                checkpoint = torch.hub.load_state_dict_from_url(
-                    args.resume, map_location='cpu', check_hash=True)
-            else:
-                checkpoint = torch.load(args.resume, map_location='cpu')
+            checkpoint = (
+                torch.hub.load_state_dict_from_url(
+                    args.resume, map_location='cpu', check_hash=True
+                )
+                if args.resume.startswith('https')
+                else torch.load(args.resume, map_location='cpu')
+            )
             model_without_ddp.load_state_dict(checkpoint['model'])
-            print("Resume checkpoint %s" % args.resume)
+            print(f"Resume checkpoint {args.resume}")
             if 'optimizer' in checkpoint and 'epoch' in checkpoint:
                 optimizer.load_state_dict(checkpoint['optimizer'])
                 args.start_epoch = checkpoint['epoch'] + 1
@@ -502,24 +507,21 @@ def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, mode
                 if 'scaler' in checkpoint:
                     loss_scaler.load_state_dict(checkpoint['scaler'])
                 print("With optim & sched!")
-    else:
-        # deepspeed, only support '--auto_resume'.
-        if args.auto_resume:
-            import glob
-            all_checkpoints = glob.glob(os.path.join(output_dir, 'checkpoint-*'))
-            latest_ckpt = -1
-            for ckpt in all_checkpoints:
-                t = ckpt.split('-')[-1].split('.')[0]
-                if t.isdigit():
-                    latest_ckpt = max(int(t), latest_ckpt)
-            if latest_ckpt >= 0:
-                args.resume = os.path.join(output_dir, 'checkpoint-%d' % latest_ckpt)
-                print("Auto resume checkpoint: %d" % latest_ckpt)
-                _, client_states = model.load_checkpoint(args.output_dir, tag='checkpoint-%d' % latest_ckpt)
-                args.start_epoch = client_states['epoch'] + 1
-                if model_ema is not None:
-                    if args.model_ema:
-                        _load_checkpoint_for_ema(model_ema, client_states['model_ema'])
+    elif args.auto_resume:
+        import glob
+        all_checkpoints = glob.glob(os.path.join(output_dir, 'checkpoint-*'))
+        latest_ckpt = -1
+        for ckpt in all_checkpoints:
+            t = ckpt.split('-')[-1].split('.')[0]
+            if t.isdigit():
+                latest_ckpt = max(int(t), latest_ckpt)
+        if latest_ckpt >= 0:
+            args.resume = os.path.join(output_dir, 'checkpoint-%d' % latest_ckpt)
+            print("Auto resume checkpoint: %d" % latest_ckpt)
+            _, client_states = model.load_checkpoint(args.output_dir, tag='checkpoint-%d' % latest_ckpt)
+            args.start_epoch = client_states['epoch'] + 1
+            if model_ema is not None and args.model_ema:
+                _load_checkpoint_for_ema(model_ema, client_states['model_ema'])
 
 
 def create_d_vae(weight_path, d_vae_type, image_size, device):

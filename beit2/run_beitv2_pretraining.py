@@ -187,15 +187,14 @@ def get_model(args):
 
 def get_visual_tokenizer(args):
     print(f"Creating visual tokenizer: {args.tokenizer_model}")
-    model = create_model(
-            args.tokenizer_model,
-            pretrained=True,
-            pretrained_weight=args.tokenizer_weight,
-            as_tokenzer=True,
-            n_code=args.codebook_size, 
-            code_dim=args.codebook_dim,
-        ).eval()
-    return model
+    return create_model(
+        args.tokenizer_model,
+        pretrained=True,
+        pretrained_weight=args.tokenizer_weight,
+        as_tokenzer=True,
+        n_code=args.codebook_size,
+        code_dim=args.codebook_dim,
+    ).eval()
 
 def main(args):
     utils.init_distributed_mode(args)
@@ -214,7 +213,7 @@ def main(args):
 
     model = get_model(args)
     patch_size = model.patch_embed.patch_size
-    print("Patch size = %s" % str(patch_size))
+    print(f"Patch size = {str(patch_size)}")
     args.window_size = (args.input_size // patch_size[0], args.input_size // patch_size[1])
     args.patch_size = patch_size
 
@@ -224,19 +223,15 @@ def main(args):
     # prepare visual tokenizer
     vqkd = get_visual_tokenizer(args).to(device)
 
-    if True:  # args.distributed:
-        num_tasks = utils.get_world_size()
-        global_rank = utils.get_rank()
-        sampler_rank = global_rank
-        num_training_steps_per_epoch = len(dataset_train) // args.batch_size // num_tasks
+    num_tasks = utils.get_world_size()
+    global_rank = utils.get_rank()
+    sampler_rank = global_rank
+    num_training_steps_per_epoch = len(dataset_train) // args.batch_size // num_tasks
 
-        sampler_train = torch.utils.data.DistributedSampler(
-            dataset_train, num_replicas=num_tasks, rank=sampler_rank, shuffle=True
-        )
-        print("Sampler_train = %s" % str(sampler_train))
-    else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
-
+    sampler_train = torch.utils.data.DistributedSampler(
+        dataset_train, num_replicas=num_tasks, rank=sampler_rank, shuffle=True
+    )
+    print(f"Sampler_train = {str(sampler_train)}")
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
         log_writer = utils.TensorboardLogger(log_dir=args.log_dir)
@@ -255,10 +250,10 @@ def main(args):
     model_without_ddp = model
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    print("Model = %s" % str(model_without_ddp))
+    print(f"Model = {str(model_without_ddp)}")
     print('number of params:', n_parameters)
 
-    print("Tokenizer = %s" % str(vqkd))
+    print(f"Tokenizer = {str(vqkd)}")
     total_batch_size = args.batch_size * utils.get_world_size()
     print("LR = %.8f" % args.lr)
     print("Batch size = %d" % total_batch_size)
@@ -320,7 +315,7 @@ def main(args):
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
+    print(f'Training time {total_time_str}')
 
 
 if __name__ == '__main__':

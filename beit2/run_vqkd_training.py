@@ -185,29 +185,24 @@ def main(args):
     else:
         dataset_val = build_vqkd_dataset(is_train=False, args=args)
 
-    if True:  # args.distributed:
-        num_tasks = utils.get_world_size()
-        global_rank = utils.get_rank()
-        sampler_rank = global_rank
-        num_training_steps_per_epoch = len(dataset_train) // args.batch_size // num_tasks
+    num_tasks = utils.get_world_size()
+    global_rank = utils.get_rank()
+    sampler_rank = global_rank
+    num_training_steps_per_epoch = len(dataset_train) // args.batch_size // num_tasks
 
-        sampler_train = torch.utils.data.DistributedSampler(
-            dataset_train, num_replicas=num_tasks, rank=sampler_rank, shuffle=True
-        )
-        print("Sampler_train = %s" % str(sampler_train))
-        if args.dist_eval:
-            if len(dataset_val) % num_tasks != 0:
-                print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-                      'This will slightly alter validation results as extra duplicate entries are added to achieve '
-                      'equal num of samples per-process.')
-            sampler_val = torch.utils.data.DistributedSampler(
-                dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
-        else:
-            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+    sampler_train = torch.utils.data.DistributedSampler(
+        dataset_train, num_replicas=num_tasks, rank=sampler_rank, shuffle=True
+    )
+    print(f"Sampler_train = {str(sampler_train)}")
+    if args.dist_eval:
+        if len(dataset_val) % num_tasks != 0:
+            print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
+                  'This will slightly alter validation results as extra duplicate entries are added to achieve '
+                  'equal num of samples per-process.')
+        sampler_val = torch.utils.data.DistributedSampler(
+            dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
     else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-
     if global_rank == 0 and args.log_dir is not None:
         os.makedirs(args.log_dir, exist_ok=True)
         log_writer = utils.TensorboardLogger(log_dir=args.log_dir)
@@ -235,7 +230,7 @@ def main(args):
     model.to(device)
     model_without_ddp = model
     if not args.eval:
-        print("Model = %s" % str(model_without_ddp))
+        print(f"Model = {str(model_without_ddp)}")
     for part in ['encoder', 'decoder']:
         model_part = eval(f"model.{part}")
         n_learnable_parameters = sum(p.numel() for p in model_part.parameters() if p.requires_grad)
@@ -272,18 +267,18 @@ def main(args):
 
     utils.auto_load_model(
         args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
-            
+
     if args.eval:
         test_stats = evaluate(data_loader_val, model, device, log_writer, 0, args=args)
         exit(0)
-        
+
     if args.calculate_codebook_usage:
         test_stats = calculate_codebook_usage(data_loader_val, model, device, log_writer, 0, args=args)
         exit(0)
-        
+
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
-            
+
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
@@ -307,14 +302,14 @@ def main(args):
             utils.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch, save_ckpt_freq=args.save_ckpt_freq)
-        
+
         if data_loader_val is not None:
             test_stats = evaluate(data_loader_val, model, device, log_writer, epoch, args=args)
             print(f"Validation loss of the network on the {len(dataset_val)} test images: {test_stats['loss']:.4f}")
 
             if log_writer is not None:
                 log_writer.update(**test_stats, head="val/loss")
-                
+
             log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                         **{f'test_{k}': v for k, v in test_stats.items()},
                         'epoch': epoch, 'n_parameters': n_learnable_parameters}
@@ -330,7 +325,7 @@ def main(args):
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
+    print(f'Training time {total_time_str}')
 
 
 if __name__ == '__main__':

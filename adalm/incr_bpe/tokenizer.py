@@ -40,6 +40,7 @@ e.g.  u"Dude - that's so cool."
         -> [u"Dude", u" - ", u"that", u"'", u"s", u"so", u"cool", u"."]
 """
 
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -59,11 +60,13 @@ _native_to_unicode = (lambda s: s.decode("utf-8")) if six.PY2 else (lambda s: s)
 
 logger = logging.getLogger(__name__)
 # This set contains all letter and number characters.
-_ALPHANUMERIC_CHAR_SET = set(
-    six.unichr(i) for i in range(sys.maxunicode)
-    if (unicodedata.category(six.unichr(i)).startswith("L") or
-        unicodedata.category(six.unichr(i)).startswith("N") or
-        unicodedata.category(six.unichr(i)).startswith("P")))
+_ALPHANUMERIC_CHAR_SET = {
+    six.unichr(i)
+    for i in range(sys.maxunicode)
+    if (unicodedata.category(six.unichr(i)).startswith("L")
+        or unicodedata.category(six.unichr(i)).startswith("N")
+        or unicodedata.category(six.unichr(i)).startswith("P"))
+}
         # unicodedata.category(six.unichr(i)).startswith("S")
 
 
@@ -141,9 +144,7 @@ def _is_punctuation(char):
   if (cp >= 33 and cp <= 47) or (cp >= 58 and cp <= 64) or (cp >= 91 and cp <= 96) or (cp >= 123 and cp <= 126):
     return True
   cat = unicodedata.category(char)
-  if cat.startswith("P"):
-    return True
-  return False
+  return bool(cat.startswith("P"))
 
 
 def decode(tokens):
@@ -194,21 +195,20 @@ def _read_filepattern(filepattern, max_lines=None, split_on_newlines=True, do_lo
           if lines_read % 100000 == 0:
             print("read", lines_read, "lines,", time.time() - start, "secs elapsed")
 
-      else:
-        if max_lines:
-          doc = []
-          for line in f:
-            if do_lower_case:
-              line = line.lower()
-            doc.append(line)
-            lines_read += 1
-            if max_lines and lines_read >= max_lines:
-              yield "".join(doc)
-              return
-          yield "".join(doc)
+      elif max_lines:
+        doc = []
+        for line in f:
+          if do_lower_case:
+            line = line.lower()
+          doc.append(line)
+          lines_read += 1
+          if max_lines and lines_read >= max_lines:
+            yield "".join(doc)
+            return
+        yield "".join(doc)
 
-        else:
-          yield f.read()
+      else:
+        yield f.read()
 
     print(time.time() - start, "for reading read file :", filename)
 

@@ -42,7 +42,7 @@ class DropPath(nn.Module):
         return drop_path(x, self.drop_prob, self.training)
     
     def extra_repr(self) -> str:
-        return 'p={}'.format(self.drop_prob)
+        return f'p={self.drop_prob}'
 
 
 class Mlp(nn.Module):
@@ -134,7 +134,7 @@ class Attention(nn.Module):
 
         if self.relative_position_bias_table is not None:
             relative_position_bias = \
-                self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
+                    self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
                     self.window_size[0] * self.window_size[1] + 1,
                     self.window_size[0] * self.window_size[1] + 1, -1)  # Wh*Ww,Wh*Ww,nH
             relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
@@ -142,21 +142,18 @@ class Attention(nn.Module):
 
         if rel_pos_bias is not None:
             attn = attn + rel_pos_bias
-        
+
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
         if return_attention:
             return attn
-            
+
         x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
         x = self.proj(x)
         x = self.proj_drop(x)
 
-        if return_qkv:
-            return x, qkv
-
-        return x
+        return (x, qkv) if return_qkv else x
 
 
 class Block(nn.Module):
@@ -374,7 +371,7 @@ class VisionTransformer(nn.Module):
         B, nc, w, h = x.shape
         x = self.patch_embed(x)
         batch_size, seq_len, _ = x.size()  
-        
+
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
 
         x = torch.cat((cls_tokens, x), dim=1)
@@ -383,7 +380,7 @@ class VisionTransformer(nn.Module):
                 x = x + self.interpolate_pos_encoding(x, w, h)
             else:
                 x = x + self.pos_embed
-                
+
         x = self.pos_drop(x)
 
         rel_pos_bias = self.rel_pos_bias() if self.rel_pos_bias is not None else None
@@ -395,10 +392,7 @@ class VisionTransformer(nn.Module):
             if return_all_tokens:
                 return self.fc_norm(x)
             t = x[:, 1:, :]
-            if return_patch_tokens:
-                return self.fc_norm(t)
-            else:
-                return self.fc_norm(t.mean(1))
+            return self.fc_norm(t) if return_patch_tokens else self.fc_norm(t.mean(1))
         else:
             if return_all_tokens:
                 return x

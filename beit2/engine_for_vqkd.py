@@ -37,21 +37,21 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('min_lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = 'Epoch: [{}]'.format(epoch)
+    header = f'Epoch: [{epoch}]'
     print_freq = 10
-        
+
     if hasattr(model.module, 'quantize'):
         try:
             model.module.quantize.reset_cluster_size(device)
             print("Reset the codebook statistic info in quantizer before each epoch")
         except:
             pass
-        
+
     for step, (batch, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         # assign learning rate & weight decay for each step
         it = start_steps + step  # global training iteration
         if lr_schedule_values is not None:
-            for i, param_group in enumerate(optimizer.param_groups):
+            for param_group in optimizer.param_groups:
                 if lr_schedule_values is not None:
                     param_group["lr"] = lr_schedule_values[it] * param_group.get("lr_scale", 1.0)
         images = batch.to(device, non_blocking=True)
@@ -62,7 +62,7 @@ def train_one_epoch(model: torch.nn.Module,
         loss_value = loss.item()
 
         if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value), force=True)
+            print(f"Loss is {loss_value}, stopping training", force=True)
             utils.save_nan_model(args, model)
             sys.exit(1)
 
@@ -72,11 +72,11 @@ def train_one_epoch(model: torch.nn.Module,
         grad_norm = loss_scaler(loss, optimizer, clip_grad=clip_grad,
                                 parameters=model.parameters(), create_graph=is_second_order)
         loss_scale_value = loss_scaler.state_dict()["scale"]
-        
+
         torch.cuda.synchronize()
 
         metric_logger.update(loss=loss_value)
-        
+
         new_log_loss = {k.split('/')[-1]:v for k, v in log_loss.items() if k not in ['total_loss']}
         metric_logger.update(**new_log_loss)
 
@@ -111,7 +111,7 @@ def train_one_epoch(model: torch.nn.Module,
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    
+
     # stat the codebook usage information
     if hasattr(model.module, 'quantize'):
         try:
@@ -141,8 +141,7 @@ def evaluate(data_loader, model, device, log_writer=None, epoch=None, args=None)
         except:
             pass
 
-    for step, (batch, extra_info) in enumerate(metric_logger.log_every(data_loader, 10, header)):
-
+    for batch, extra_info in metric_logger.log_every(data_loader, 10, header):
         images = batch.to(device, non_blocking=True)
         loss, log_loss = model(images)
 
@@ -177,19 +176,19 @@ def calculate_codebook_usage(data_loader, model, device, log_writer=None, epoch=
 
     # switch to evaluation mode
     model.eval()
-    
+
     codebook_num = args.codebook_n_emd
     codebook_cnt = torch.zeros(codebook_num, dtype=torch.float64).to(device)
 
-    for step, (images, _) in enumerate(metric_logger.log_every(data_loader, 10, header)):
+    for images, _ in metric_logger.log_every(data_loader, 10, header):
         images = images.to(device, non_blocking=True)
 
         outputs = utils.get_model(model).get_tokens(images)['token'].view(-1)
-        
+
         outputs_gather_list = [torch.zeros_like(outputs) for _ in range(utils.get_world_size())]
         torch.distributed.all_gather(outputs_gather_list, outputs)
         all_tokens = torch.cat(outputs_gather_list, dim=0).view(-1) # [B * N * Ngpu, ]
-        
+
         codebook_cnt += torch.bincount(all_tokens, minlength=codebook_num)
 
     # statistic

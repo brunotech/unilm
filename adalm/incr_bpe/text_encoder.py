@@ -69,7 +69,7 @@ def native_to_unicode(s):
     return to_unicode(s)
   except UnicodeDecodeError:
     res = to_unicode(s, ignore_errors=True)
-    logger.info("Ignoring Unicode error, outputting: %s" % res)
+    logger.info(f"Ignoring Unicode error, outputting: {res}")
     return res
 
 
@@ -194,7 +194,7 @@ def _escape_token(token, alphabet):
     ValueError: If the provided token is not unicode.
   """
   if not isinstance(token, six.text_type):
-    raise ValueError("Expected string type for token, got %s" % type(token))
+    raise ValueError(f"Expected string type for token, got {type(token)}")
 
   token = token.replace(u"\\", u"\\\\").replace(u"_", u"\\u")
   ret = [c if c in alphabet and c != u"\n" else r"\%d;" % ord(c) for c in token]
@@ -203,7 +203,7 @@ def _escape_token(token, alphabet):
 def _my_escape_token(token, alphabet):
 
   if not isinstance(token, six.text_type):
-    raise ValueError("Expected string type for token, got %s" % type(token))
+    raise ValueError(f"Expected string type for token, got {type(token)}")
 
   token = token.replace(u"\\", u"\\\\").replace(u"_", u"\\u")
   ret = [c if c in alphabet and c != u"\n" else r"\%d;" % ord(c) for c in token]
@@ -593,9 +593,8 @@ class SubwordTextEncoder(TextEncoder):
     # We build iteratively.  On each iteration, we segment all the words,
     # then count the resulting potential subtokens, keeping the ones
     # with high enough counts for our new vocabulary.
-    if min_count < 1:
-      min_count = 1
-    for i in range(num_iterations):
+    min_count = max(min_count, 1)
+    for _ in range(num_iterations):
       #logger.info("Iteration {0}".format(i))
       # Collect all substrings of the encoded token that break along current
       # subtoken boundaries.
@@ -667,10 +666,6 @@ class SubwordTextEncoder(TextEncoder):
         new_subtoken_strings = reserved_tokens + new_subtoken_strings
       new_subtoken_strings = list(set(new_subtoken_strings))
       self._init_subtokens_from_list(new_subtoken_strings)
-      #logger.info("vocab_size = %d" % self.vocab_size)
-      # print("vocab_size = %d" % self.vocab_size)
-      # print(self.vocab_size)
-
     self.subtokens_with_counts = new_subtoken_strings_with_count
 
     # Frequency of "_" is high.
@@ -683,7 +678,7 @@ class SubwordTextEncoder(TextEncoder):
       if subtoken.startswith("_") and subtoken != "_":
         new_subtoken_strings[idx] = subtoken[1:]
       elif subtoken[0] in self._alphabet and subtoken not in reserved_tokens:
-        new_subtoken_strings[idx] = "##" + subtoken
+        new_subtoken_strings[idx] = f"##{subtoken}"
       else:
         oov_list.append(subtoken)
     new_subtoken_strings.extend(char for char in self._alphabet
@@ -694,7 +689,9 @@ class SubwordTextEncoder(TextEncoder):
     new_subtoken_strings = list(set(new_subtoken_strings))
     self._init_subtokens_from_list(new_subtoken_strings)
     #logger.info("vocab_size = %d" % self.vocab_size)
-    logger.info("total vocab size : {}, {} seconds elapsed ".format(self.vocab_size, time.time() - start_time))
+    logger.info(
+        f"total vocab size : {self.vocab_size}, {time.time() - start_time} seconds elapsed "
+    )
 
   # @property
   # def all_subtoken_strings(self):
@@ -731,7 +728,7 @@ class SubwordTextEncoder(TextEncoder):
 
     # we remember the maximum length of any subtoken to avoid having to
     # check arbitrarily long strings.
-    self._max_subtoken_len = max([len(s) for s in subtoken_strings])
+    self._max_subtoken_len = max(len(s) for s in subtoken_strings)
     self._subtoken_string_to_id = {
         s: i + len(reserved_tokens)
         for i, s in enumerate(subtoken_strings) if s
@@ -774,10 +771,10 @@ class SubwordTextEncoder(TextEncoder):
 
   def store_to_file(self, filename, add_single_quotes=True):
     #with tf.gfile.Open(filename, "w") as f:
-    with open(filename, "w") as f:  
+    with open(filename, "w") as f:
       for subtoken_string in self._all_subtoken_strings:
         if add_single_quotes:
-          f.write("'" + unicode_to_native(subtoken_string) + "'\n")
+          f.write(f"'{unicode_to_native(subtoken_string)}" + "'\n")
         else:
           f.write(unicode_to_native(subtoken_string) + "\n")
 

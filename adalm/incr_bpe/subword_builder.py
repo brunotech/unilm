@@ -29,19 +29,17 @@ FLAGS = tf.flags.FLAGS
 
 
 def merge_output_file_with_bert_vocab(output_filename, bert_vocab, temp_path):
-  writer = open(output_filename, 'w', encoding='utf-8')
-  _set = set()
-  with open(bert_vocab, 'r', encoding='utf-8') as reader:
-      for line in reader:
-          writer.write(line)
-          _set.add(line.strip())
-  print(temp_path)
-  with open(temp_path, 'r', encoding='utf-8') as reader:
-      for line in reader:
-          if line.strip() not in _set:
-              writer.write(line)
-
-  writer.close()
+  with open(output_filename, 'w', encoding='utf-8') as writer:
+    _set = set()
+    with open(bert_vocab, 'r', encoding='utf-8') as reader:
+        for line in reader:
+            writer.write(line)
+            _set.add(line.strip())
+    print(temp_path)
+    with open(temp_path, 'r', encoding='utf-8') as reader:
+        for line in reader:
+            if line.strip() not in _set:
+                writer.write(line)
   # os.remove(temp_path)
 
 def main(unused_argv):

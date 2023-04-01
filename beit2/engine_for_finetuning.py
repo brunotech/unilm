@@ -41,7 +41,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('min_lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = 'Epoch: [{}]'.format(epoch)
+    header = f'Epoch: [{epoch}]'
     print_freq = 10
 
     if loss_scaler is None:
@@ -81,7 +81,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         loss_value = loss.item()
 
         if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
+            print(f"Loss is {loss_value}, stopping training")
             sys.exit(1)
 
         if loss_scaler is None:
@@ -89,11 +89,10 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             model.backward(loss)
             model.step()
 
-            if (data_iter_step + 1) % update_freq == 0:
-                # model.zero_grad()
-                # Deepspeed will call step() & model.zero_grad() automatic
-                if model_ema is not None:
-                    model_ema.update(model)
+            if (
+                data_iter_step + 1
+            ) % update_freq == 0 and model_ema is not None:
+                model_ema.update(model)
             grad_norm = None
             loss_scale_value = get_loss_scale_for_deepspeed(model)
         else:
@@ -160,7 +159,7 @@ def evaluate(data_loader, model, device):
     # switch to evaluation mode
     model.eval()
 
-    for step, batch in enumerate(metric_logger.log_every(data_loader, 10, header)):
+    for batch in metric_logger.log_every(data_loader, 10, header):
         images = batch[0]
         target = batch[-1]
         images = images.to(device, non_blocking=True)

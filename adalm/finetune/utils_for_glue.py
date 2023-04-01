@@ -51,8 +51,7 @@ class InputExample(object):
 
     def to_dict(self):
         """Serializes this instance to a Python dictionary."""
-        output = copy.deepcopy(self.__dict__)
-        return output
+        return copy.deepcopy(self.__dict__)
 
     def to_json_string(self):
         """Serializes this instance to a JSON string."""
@@ -83,8 +82,7 @@ class InputFeatures(object):
 
     def to_dict(self):
         """Serializes this instance to a Python dictionary."""
-        output = copy.deepcopy(self.__dict__)
-        return output
+        return copy.deepcopy(self.__dict__)
 
     def to_json_string(self):
         """Serializes this instance to a JSON string."""
@@ -114,21 +112,19 @@ class DataProcessor(object):
             lines = []
             for line in reader:
                 if sys.version_info[0] == 2:
-                    line = list(unicode(cell, 'utf-8') for cell in line)
+                    line = [unicode(cell, 'utf-8') for cell in line]
                 lines.append(line)
             return lines
 
     @classmethod
     def _read_json(cls, input_file):
         with open(input_file, "r", encoding="utf-8-sig") as f:
-            lines = json.loads(f.read())
-            return lines  
+            return json.loads(f.read())  
     
     @classmethod
     def _read_jsonl(cls, input_file):
         with open(input_file, "r", encoding="utf-8-sig") as f:
-            lines = f.readlines()
-            return lines 
+            return f.readlines() 
 
 def glue_convert_examples_to_features(examples, tokenizer,
                                       max_length=512,
@@ -168,10 +164,10 @@ def glue_convert_examples_to_features(examples, tokenizer,
         processor = glue_processors[task]()
         if label_list is None:
             label_list = processor.get_labels()
-            logger.info("Using label list %s for task %s" % (label_list, task))
+            logger.info(f"Using label list {label_list} for task {task}")
         if output_mode is None:
             output_mode = glue_output_modes[task]
-            logger.info("Using output mode %s for task %s" % (output_mode, task))
+            logger.info(f"Using output mode {output_mode} for task {task}")
 
     label_map = {label: i for i, label in enumerate(label_list)}
 
@@ -190,11 +186,7 @@ def glue_convert_examples_to_features(examples, tokenizer,
             max_length=max_length,
         )
         input_ids = inputs["input_ids"]
-        if "token_type_ids" in inputs:
-            token_type_ids = inputs["token_type_ids"]
-        else:
-            token_type_ids = []
-
+        token_type_ids = inputs["token_type_ids"] if "token_type_ids" in inputs else []
         # The mask has 1 for real tokens and 0 for padding tokens. Only real
         # tokens are attended to.
         attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
@@ -214,9 +206,15 @@ def glue_convert_examples_to_features(examples, tokenizer,
                 padding_length = max_length
             token_type_ids = token_type_ids + ([pad_token_segment_id] * padding_length)
 
-        assert len(input_ids) == max_length, "Error with input length {} vs {}".format(len(input_ids), max_length)
-        assert len(attention_mask) == max_length, "Error with input length {} vs {}".format(len(attention_mask), max_length)
-        assert len(token_type_ids) == max_length, "Error with input length {} vs {}".format(len(token_type_ids), max_length)
+        assert (
+            len(input_ids) == max_length
+        ), f"Error with input length {len(input_ids)} vs {max_length}"
+        assert (
+            len(attention_mask) == max_length
+        ), f"Error with input length {len(attention_mask)} vs {max_length}"
+        assert (
+            len(token_type_ids) == max_length
+        ), f"Error with input length {len(token_type_ids)} vs {max_length}"
 
         if output_mode == "classification":
             label = label_map[example.label]
@@ -227,11 +225,13 @@ def glue_convert_examples_to_features(examples, tokenizer,
 
         if ex_index < 5:
             logger.info("*** Example ***")
-            logger.info("guid: %s" % (example.guid))
-            logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-            logger.info("input_tokens: %s" % " ".join(tokenizer.convert_ids_to_tokens(input_ids)))
-            logger.info("attention_mask: %s" % " ".join([str(x) for x in attention_mask]))
-            logger.info("token_type_ids: %s" % " ".join([str(x) for x in token_type_ids]))
+            logger.info(f"guid: {example.guid}")
+            logger.info(f'input_ids: {" ".join([str(x) for x in input_ids])}')
+            logger.info(
+                f'input_tokens: {" ".join(tokenizer.convert_ids_to_tokens(input_ids))}'
+            )
+            logger.info(f'attention_mask: {" ".join([str(x) for x in attention_mask])}')
+            logger.info(f'token_type_ids: {" ".join([str(x) for x in token_type_ids])}')
             logger.info("label: %s (id = %d)" % (example.label, label))
 
         features.append(
@@ -255,7 +255,7 @@ class MrpcProcessor(DataProcessor):
 
     def get_train_examples(self, data_dir):
         """See base class."""
-        logger.info("LOOKING AT {}".format(os.path.join(data_dir, "train.tsv")))
+        logger.info(f'LOOKING AT {os.path.join(data_dir, "train.tsv")}')
         return self._create_examples(
             self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
 
@@ -274,7 +274,7 @@ class MrpcProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, i)
+            guid = f"{set_type}-{i}"
             text_a = line[3]
             text_b = line[4]
             label = line[0]
@@ -320,7 +320,7 @@ class MnliProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, line[0])
+            guid = f"{set_type}-{line[0]}"
             text_a = line[8]
             text_b = line[9]
             label = line[-1]
@@ -372,7 +372,7 @@ class ColaProcessor(DataProcessor):
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
-            guid = "%s-%s" % (set_type, i)
+            guid = f"{set_type}-{i}"
             text_a = line[3]
             label = line[1]
             examples.append(
@@ -410,7 +410,7 @@ class Sst2Processor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, i)
+            guid = f"{set_type}-{i}"
             text_a = line[0]
             label = line[1]
             examples.append(
@@ -453,7 +453,7 @@ class StsbProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, line[0])
+            guid = f"{set_type}-{line[0]}"
             text_a = line[1]
             text_b = line[2]
             label = line[-1]
@@ -492,7 +492,7 @@ class QqpProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, line[0])
+            guid = f"{set_type}-{line[0]}"
             try:
                 text_a = line[3]
                 text_b = line[4]
@@ -535,7 +535,7 @@ class QnliProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, line[0])
+            guid = f"{set_type}-{line[0]}"
             text_a = line[1]
             text_b = line[2]
             label = line[-1]
@@ -574,7 +574,7 @@ class RteProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, line[0])
+            guid = f"{set_type}-{line[0]}"
             text_a = line[1]
             text_b = line[2]
             label = line[-1]
@@ -613,7 +613,7 @@ class WnliProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, line[0])
+            guid = f"{set_type}-{line[0]}"
             text_a = line[1]
             text_b = line[2]
             label = line[-1]
@@ -645,8 +645,8 @@ class ChemProcessor(DataProcessor):
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
         examples = []
-        for (i, line) in enumerate(lines):
-            guid = "%s-%s" % (set_type, line[0])
+        for line in lines:
+            guid = f"{set_type}-{line[0]}"
             text_a = line[1]
             label = line[-1]
             examples.append(
@@ -678,7 +678,7 @@ class ARCProcessor(DataProcessor):
         examples = []
         for (i, line) in enumerate(lines):
             line = json.loads(line)
-            guid = "%s-%s" % (set_type, i)
+            guid = f"{set_type}-{i}"
             text_a = line["text"]
             label = line["label"]
             examples.append(
@@ -710,7 +710,7 @@ class SCIProcessor(DataProcessor):
         examples = []
         for (i, line) in enumerate(lines):
             line = json.loads(line)
-            guid = "%s-%s" % (set_type, i)
+            guid = f"{set_type}-{i}"
             text_a = line["text"]
             label = line["label"]
             examples.append(
@@ -841,8 +841,8 @@ def glue_compute_metrics(task_name, preds, labels, label_list):
     elif task_name == "wnli":
         return {"acc": simple_accuracy(preds, labels)}
     elif task_name == "chemprot":
-        return acc_and_micro_f1(preds, labels, label_list) 
-    elif task_name == "arc" or task_name == "sci":
-        return acc_and_macro_f1(preds, labels)    
+        return acc_and_micro_f1(preds, labels, label_list)
+    elif task_name in ["arc", "sci"]:
+        return acc_and_macro_f1(preds, labels)
     else:
         raise KeyError(task_name)

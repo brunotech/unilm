@@ -18,8 +18,7 @@ class GradMultiply(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, scale):
         ctx.scale = scale
-        res = x.new(x)
-        return res
+        return x.new(x)
 
     @staticmethod
     def backward(ctx, grad):
@@ -97,25 +96,23 @@ def gelu(x: torch.Tensor) -> torch.Tensor:
 def get_activation_fn(activation: str):
     """Returns the activation function corresponding to `activation`"""
 
-    if activation == "relu":
-        return F.relu
-    elif activation == "gelu":
+    if activation == "gelu":
         return gelu
+    elif activation == "gelu_accurate":
+        return gelu_accurate
     elif activation == "gelu_fast":
         warnings.warn(
             "--activation-fn=gelu_fast has been renamed to gelu_accurate"
         )
         return gelu_accurate
-    elif activation == "gelu_accurate":
-        return gelu_accurate
+    elif activation in {"linear", "glu"}:
+        return lambda x: x
+    elif activation == "relu":
+        return F.relu
     elif activation == "tanh":
         return torch.tanh
-    elif activation == "linear":
-        return lambda x: x
-    elif activation == "glu":
-        return lambda x: x
     else:
-        raise RuntimeError("--activation-fn {} not supported".format(activation))
+        raise RuntimeError(f"--activation-fn {activation} not supported")
 
 
 def quant_noise(module, p, block_size):
@@ -168,51 +165,52 @@ def quant_noise(module, p, block_size):
 
     def _forward_pre_hook(mod, input):
         # no noise for evaluation
-        if mod.training:
-            if not is_conv:
-                # gather weight and sizes
-                weight = mod.weight
-                in_features = weight.size(1)
-                out_features = weight.size(0)
+        if not mod.training:
+            return
+        if not is_conv:
+            # gather weight and sizes
+            weight = mod.weight
+            in_features = weight.size(1)
+            out_features = weight.size(0)
 
-                # split weight matrix into blocks and randomly drop selected blocks
+            # split weight matrix into blocks and randomly drop selected blocks
+            mask = torch.zeros(
+                in_features // block_size * out_features, device=weight.device
+            )
+            mask.bernoulli_(p)
+            mask = mask.repeat_interleave(block_size, -1).view(-1, in_features)
+
+        else:
+            # gather weight and sizes
+            weight = mod.weight
+            in_channels = mod.in_channels
+            out_channels = mod.out_channels
+
+            # split weight matrix into blocks and randomly drop selected blocks
+            if mod.kernel_size == (1, 1):
                 mask = torch.zeros(
-                    in_features // block_size * out_features, device=weight.device
+                    int(in_channels // block_size * out_channels),
+                    device=weight.device,
                 )
                 mask.bernoulli_(p)
-                mask = mask.repeat_interleave(block_size, -1).view(-1, in_features)
-
+                mask = mask.repeat_interleave(block_size, -1).view(-1, in_channels)
             else:
-                # gather weight and sizes
-                weight = mod.weight
-                in_channels = mod.in_channels
-                out_channels = mod.out_channels
+                mask = torch.zeros(
+                    weight.size(0), weight.size(1), device=weight.device
+                )
+                mask.bernoulli_(p)
+                mask = (
+                    mask.unsqueeze(2)
+                    .unsqueeze(3)
+                    .repeat(1, 1, mod.kernel_size[0], mod.kernel_size[1])
+                )
 
-                # split weight matrix into blocks and randomly drop selected blocks
-                if mod.kernel_size == (1, 1):
-                    mask = torch.zeros(
-                        int(in_channels // block_size * out_channels),
-                        device=weight.device,
-                    )
-                    mask.bernoulli_(p)
-                    mask = mask.repeat_interleave(block_size, -1).view(-1, in_channels)
-                else:
-                    mask = torch.zeros(
-                        weight.size(0), weight.size(1), device=weight.device
-                    )
-                    mask.bernoulli_(p)
-                    mask = (
-                        mask.unsqueeze(2)
-                        .unsqueeze(3)
-                        .repeat(1, 1, mod.kernel_size[0], mod.kernel_size[1])
-                    )
-
-            # scale weights and apply mask
-            mask = mask.to(
-                torch.bool
-            )  # x.bool() is not currently supported in TorchScript
-            s = 1 / (1 - p)
-            mod.weight.data = s * weight.masked_fill(mask, 0)
+        # scale weights and apply mask
+        mask = mask.to(
+            torch.bool
+        )  # x.bool() is not currently supported in TorchScript
+        s = 1 / (1 - p)
+        mod.weight.data = s * weight.masked_fill(mask, 0)
 
     module.register_forward_pre_hook(_forward_pre_hook)
     return module

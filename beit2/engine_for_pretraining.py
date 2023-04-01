@@ -31,7 +31,7 @@ def train_one_epoch(model: torch.nn.Module, vqkd: torch.nn.Module,
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('min_lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = 'Epoch: [{}]'.format(epoch)
+    header = f'Epoch: [{epoch}]'
     print_freq = 10
 
     loss_fn = nn.CrossEntropyLoss()
@@ -82,7 +82,7 @@ def train_one_epoch(model: torch.nn.Module, vqkd: torch.nn.Module,
         loss_scale_value = loss_scaler.state_dict()["scale"]
 
         torch.cuda.synchronize()
-        
+
         if isinstance(outputs, list):
             mlm_acc_1 = (outputs[0].max(-1)[1] == labels).float().mean().item()
             mlm_acc_2 = (outputs[1].max(-1)[1] == labels).float().mean().item()

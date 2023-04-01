@@ -107,12 +107,36 @@ class DiscreteVAE(BasicVAE):
         enc_in = channels
         dec_in = codebook_dim
 
-        for layer_id in range(num_layers):
-            enc_layers.append(nn.Sequential(nn.Conv2d(enc_in, hidden_dim, 4, stride=2, padding=1), nn.ReLU()))
-            enc_layers.append(ResBlock(chan_in=hidden_dim, hidden_size=hidden_dim, chan_out=hidden_dim))
+        for _ in range(num_layers):
+            enc_layers.extend(
+                (
+                    nn.Sequential(
+                        nn.Conv2d(enc_in, hidden_dim, 4, stride=2, padding=1),
+                        nn.ReLU(),
+                    ),
+                    ResBlock(
+                        chan_in=hidden_dim,
+                        hidden_size=hidden_dim,
+                        chan_out=hidden_dim,
+                    ),
+                )
+            )
             enc_in = hidden_dim
-            dec_layers.append(nn.Sequential(nn.ConvTranspose2d(dec_in, hidden_dim, 4, stride=2, padding=1), nn.ReLU()))
-            dec_layers.append(ResBlock(chan_in=hidden_dim, hidden_size=hidden_dim, chan_out=hidden_dim))
+            dec_layers.extend(
+                (
+                    nn.Sequential(
+                        nn.ConvTranspose2d(
+                            dec_in, hidden_dim, 4, stride=2, padding=1
+                        ),
+                        nn.ReLU(),
+                    ),
+                    ResBlock(
+                        chan_in=hidden_dim,
+                        hidden_size=hidden_dim,
+                        chan_out=hidden_dim,
+                    ),
+                )
+            )
             dec_in = hidden_dim
 
         enc_layers.append(nn.Conv2d(hidden_dim, num_tokens, 1))
@@ -134,8 +158,7 @@ class DiscreteVAE(BasicVAE):
     @eval_decorator
     def get_codebook_indices(self, images):
         logits = self.forward(images, return_logits = True)
-        codebook_indices = logits.argmax(dim = 1)
-        return codebook_indices
+        return logits.argmax(dim = 1)
 
     @torch.no_grad()
     @eval_decorator
@@ -152,8 +175,7 @@ class DiscreteVAE(BasicVAE):
         h = w = int(sqrt(n))
 
         image_embeds = rearrange(image_embeds, 'b (h w) d -> b d h w', h = h, w = w)
-        images = self.decoder(image_embeds)
-        return images
+        return self.decoder(image_embeds)
 
     def forward(
         self,
@@ -194,10 +216,7 @@ class DiscreteVAE(BasicVAE):
 
         loss = recon_loss + (kl_div * kl_div_loss_weight)
 
-        if not return_recons:
-            return loss
-
-        return loss, out
+        return (loss, out) if return_recons else loss
 
 
 from dall_e import load_model
@@ -231,7 +250,6 @@ class Dalle_VAE(BasicVAE):
     def forward(self, img_seq_prob, no_process=False):
         if no_process:
             return self.decoder(img_seq_prob.float()).float()
-        else:
-            bsz, seq_len, num_class = img_seq_prob.size()
-            z = img_seq_prob.view(bsz, self.image_size // 8, self.image_size // 8, self.encoder.vocab_size)
-            return self.decoder(z.permute(0, 3, 1, 2).float()).float()
+        bsz, seq_len, num_class = img_seq_prob.size()
+        z = img_seq_prob.view(bsz, self.image_size // 8, self.image_size // 8, self.encoder.vocab_size)
+        return self.decoder(z.permute(0, 3, 1, 2).float()).float()
